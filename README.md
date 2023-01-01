@@ -1,0 +1,3 @@
+# multissh
+
+A CLI (command line interface) tool for executing commands on multiple machines simultaneously. This tool allows users to easily update or execute commands on a group of remote machines by providing a list of IP addresses or hostnames as arguments. The tool uses SSH to connect to the remote machines and execute the specified commands. This can save time and effort compared to manually logging into each machine and executing the commands individually.
