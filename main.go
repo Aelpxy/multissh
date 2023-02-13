@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -22,14 +23,21 @@ func main() {
 
 	ips := strings.Split(*ipList, ",")
 
+	var wg sync.WaitGroup
 	for _, ip := range ips {
-		cmd := exec.Command("ssh", *user+"@"+ip, "bash -s")
-		cmd.Stdin = strings.NewReader(string(script))
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("[ERROR] %s: %s\n", ip, err)
-		} else {
-			fmt.Printf("[LOG] %s:\n%s\n", ip, strings.TrimSpace(string(output)))
-		}
+		wg.Add(1)
+		go func(ip string) {
+			defer wg.Done()
+
+			cmd := exec.Command("ssh", *user+"@"+ip, "bash -s")
+			cmd.Stdin = strings.NewReader(string(script))
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				fmt.Printf("[ERROR] %s: %s\n", ip, err)
+			} else {
+				fmt.Printf("[LOG] %s:\n%s\n", ip, strings.TrimSpace(string(output)))
+			}
+		}(ip)
 	}
+	wg.Wait()
 }
