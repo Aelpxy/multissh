@@ -1,18 +1,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 func main() {
 	ipList := flag.String("ips", "", "list of IP addresses to execute command on")
 	scriptFile := flag.String("script", "", "path to shell script file containing the update commands")
 	user := flag.String("user", "user", "username to use when connecting to the remote systems")
+	timeout := flag.Duration("timeout", 30*time.Second, "timeout for the SSH connection")
 	flag.Parse()
 
 	script, err := os.ReadFile(*scriptFile)
@@ -31,11 +34,28 @@ func main() {
 
 			cmd := exec.Command("ssh", *user+"@"+ip, "bash -s")
 			cmd.Stdin = strings.NewReader(string(script))
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				fmt.Printf("[ERROR] %s: %s\n", ip, err)
-			} else {
-				fmt.Printf("[LOG] %s:\n%s\n", ip, strings.TrimSpace(string(output)))
+
+			ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+			defer cancel()
+
+			cmd.Start()
+			done := make(chan error, 1)
+			go func() {
+				done <- cmd.Wait()
+			}()
+
+			select {
+			case <-ctx.Done():
+				fmt.Printf("[ERROR] %s: timed out while connecting\n", ip)
+				if err := cmd.Process.Kill(); err != nil {
+					fmt.Printf("[ERROR] %s: failed to kill SSH process: %s\n", ip, err)
+				}
+			case err := <-done:
+				if err != nil {
+					fmt.Printf("[ERROR] %s: %s\n", ip, err)
+				} else {
+					fmt.Printf("[LOG] %s: finished successfully\n", ip)
+				}
 			}
 		}(ip)
 	}
